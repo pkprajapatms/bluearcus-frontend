@@ -1,45 +1,36 @@
 <template>
-  <div id="app">
+  <div id="app" class="container">
     <div v-if="loading" class="loading-container">
       <div class="loading-spinner"></div>
       <div class="loading-text">Loading...</div>
     </div>
-    <div v-else>
-      <div class="button-container">
-        <button @click="fetchChartData('line')">Default Line Graph</button>
-        <button @click="fetchChartData('bar')">Default Bar Graph</button>
-        <button @click="clearCache">Clear Cache</button>
-      </div>
-      <form @submit.prevent="fetchChartDataByRange">
-        <div class="row">
-          <div class="col-25">
-            <label for="start">Start Date:</label>
-          </div>
-          <div class="col-25">
-            <input type="date" id="start" v-model="startDate">
-          </div>
+    <div v-else class="content">
+      <div class="form-container">
+        <h1 class="title">Graph Data Visualization</h1>
+        <div class="button-container">
+          <button class="btn" @click="fetchChartData('line')">Default Line Graph</button>
+          <button class="btn" @click="fetchChartData('bar')">Default Bar Graph</button>
+          <button class="btn" @click="clearCache">Clear Cache</button>
         </div>
-        <div class="row">
-          <div class="col-25">
-            <label for="end">End Date:</label>
+        <form @submit.prevent="fetchChartDataByRange" class="form">
+          <div class="form-group">
+            <label class="label" for="start">Start Date:</label>
+            <input class="input" type="date" id="start" v-model="startDate">
           </div>
-          <div class="col-25">
-            <input type="date" id="end" v-model="endDate">
+          <div class="form-group">
+            <label class="label" for="end">End Date:</label>
+            <input class="input" type="date" id="end" v-model="endDate">
           </div>
-        </div>
-        <div class="row">
-          <div class="col-25">
-            <label for="graphtype">Graph Type:</label>
-          </div>
-          <div class="col-25">
-            <select id="graphtype" name="graphtype" v-model="chartType">
+          <div class="form-group">
+            <label class="label" for="graphtype">Graph Type:</label>
+            <select class="select" id="graphtype" name="graphtype" v-model="chartType">
               <option value="line">Line</option>
               <option value="bar">Bar</option>
             </select>
           </div>
-        </div>
-        <button type="submit">Fetch Data by Range</button>
-      </form>
+          <button class="btn btn-primary" type="submit">Fetch Data by Range</button>
+        </form>
+      </div>
     </div>
   </div>
 </template>
@@ -89,7 +80,7 @@ export default {
       })
         .then(response => {
           this.processData(response.data);
-          this.renderChart();
+          this.renderChart(); // Re-render chart with new data
           this.loading = false;
         })
         .catch(error => {
@@ -106,41 +97,8 @@ export default {
           console.error('Error clearing cache:', error);
         });
     },
-    /**
-    * Process WebSocket data received from the server.
-    * @param {Object} data - The WebSocket data containing x, y, timestamp, and graph type.
-    */
-    processWebsocketData(data) {
-      const x = data.x;
-      const y = data.y;
-      const timestamp = data.timestamp;
-      const graphtype = data.type;
-
-      if (this.chartType === graphtype){
-
-        // Check if both start and end dates are specified
-        if (this.startDate !== '' && this.endDate !== ''){
-          // Check if the timestamp falls within the specified date range
-          if (this.startDate <= timestamp && timestamp <= this.endDate){
-            if (this.sumMap.has(x)) {
-              this.sumMap.set(x, this.sumMap.get(x) + y);
-            } else {
-              this.sumMap.set(x, y);
-            }
-          }
-        } else {
-          // Update the sumMap with the new data point (no date range filtering)
-          if (this.sumMap.has(x)) {
-              this.sumMap.set(x, this.sumMap.get(x) + y);
-            } else {
-              this.sumMap.set(x, y);
-            }
-        }
-        this.chartLabels = Array.from(this.sumMap.keys());
-        this.chartData = Array.from(this.sumMap.values());
-      }
-    },
     processData(data) {
+      this.sumMap.clear(); // Clear previous data
       data.forEach(point => {
         const x = point.x;
         const y = point.y;
@@ -155,11 +113,11 @@ export default {
     },
     renderChart() {
       if (this.chartInstance) {
-        this.chartInstance.destroy();
+        this.chartInstance.destroy(); // Destroy old chart instance
       }
       const ctx = document.getElementById('myChart').getContext('2d');
       this.chartInstance = new Chart(ctx, {
-        type: this.chartType, // Use selected chart type
+        type: this.chartType,
         data: {
           labels: this.chartLabels,
           datasets: [{
@@ -172,6 +130,35 @@ export default {
         },
       });
     },
+      processWebsocketData(data) {
+      const x = data.x;
+      const y = data.y;
+      const timestamp = data.timestamp;
+      const graphtype = data.type;
+
+      if (this.chartType === graphtype) {
+        // Check if both start and end dates are specified
+        if (this.startDate !== '' && this.endDate !== '') {
+          // Check if the timestamp falls within the specified date range
+          if (this.startDate <= timestamp && timestamp <= this.endDate) {
+            if (this.sumMap.has(x)) {
+              this.sumMap.set(x, this.sumMap.get(x) + y);
+            } else {
+              this.sumMap.set(x, y);
+            }
+          }
+        } else {
+          // Update the sumMap with the new data point (no date range filtering)
+          if (this.sumMap.has(x)) {
+            this.sumMap.set(x, this.sumMap.get(x) + y);
+          } else {
+            this.sumMap.set(x, y);
+          }
+        }
+        this.chartLabels = Array.from(this.sumMap.keys());
+        this.chartData = Array.from(this.sumMap.values());
+      }
+    },
     initializeWebSocket() {
       this.ws = new WebSocket('ws://localhost:8080/ws');
       this.ws.onopen = () => {
@@ -180,8 +167,8 @@ export default {
       this.ws.onmessage = event => {
         const newData = JSON.parse(event.data);
         console.log('Received data from websocket', newData);
-        this.processWebsocketData(newData);
-        this.renderChart();
+        this.processWebsocketData([newData]); // Process single data point
+        this.renderChart(); // Re-render chart with new data
       };
       this.ws.onerror = error => {
         console.error('WebSocket error:', error);
@@ -206,82 +193,90 @@ export default {
 };
 </script>
 
-
 <style>
+  body {
+    font-family: Arial, sans-serif;
+    background-color: #f0f0f0;
+    margin: 0;
+    padding: 0;
+  }
 
-html, body {
-  height: 100%;
-  margin: 0;
-  padding: 0;
-}
+  .container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+  }
 
-body {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-}
+  .content {
+    width: 100%;
+    max-width: 800px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
 
-#app {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: Arial, sans-serif;
-  margin: 5px;
-  padding: 6px;
-}
+  .form-container {
+    width: 100%;
+    background-color: #fff;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    margin-bottom: 20px;
+  }
 
-.loading-container {
-  display: flex;
-  align-items: center;
-}
+  .title {
+    margin-top: 0;
+    margin-bottom: 20px;
+    color: #333;
+    text-align: center;
+  }
 
-.loading-spinner {
-  border: 4px solid rgba(0, 0, 0, 0.1);
-  border-radius: 50%;
-  width: 30px;
-  height: 30px;
-  animation: spin 1s linear infinite;
-  margin-right: 10px;
-}
+  .button-container {
+    text-align: center;
+    margin-bottom: 20px;
+  }
 
-@keyframes spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
-}
+  .btn {
+    background-color: #4CAF50;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    cursor: pointer;
+    border-radius: 5px;
+    margin-right: 10px;
+  }
 
-.loading-text {
-  font-size: 18px;
-  color: #333;
-}
+  .btn-primary {
+    background-color: #007bff;
+  }
 
-.button-container {
-  margin-top: 20px;
-  height: auto; /* Change height to auto */
-  width: 100%;
-}
+  .btn:hover {
+    background-color: #45a049;
+  }
 
-#myChart {
-  display: block !important; /* Override inline display property */
-  width: 80% !important; /* Override inline width property */
-  height: 80% !important; /* Override inline height property */
-  margin: 20px;
-  border: 2px solid black;
-  padding: 10px;
-  border-radius: 5%;
-}
+  .form {
+    text-align: center;
+  }
 
-button {
-  margin: 0 10px;
-  padding: 10px 20px;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-  transition: background-color 0.3s ease;
-}
+  .form-group {
+    margin-bottom: 20px;
+    text-align: left;
+  }
 
-button:hover {
-  background-color: #0056b3;
-}
+  .label {
+    font-weight: bold;
+    margin-bottom: 5px;
+    display: block;
+  }
+
+  .input,
+  .select {
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    width: calc(100% - 22px); /* Adjusted width to account for padding */
+    box-sizing: border-box;
+  }
 </style>
